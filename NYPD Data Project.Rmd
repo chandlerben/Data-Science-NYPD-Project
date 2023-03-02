@@ -1,0 +1,145 @@
+---
+title: "NYPD Data"
+author: "B. Chandler"
+date: "2023-01-21"
+output: pdf_document
+---
+
+## Introduction to Project
+
+This project has the goal of using the NYPD Shooting Incident Data (Historic) data set provided by the data.cityofnewyork.us on catalog.data.gov to examine if there are meaningful trends, patterns, or information that can be gleaned.  This identification process is the first step to preventing and lessening reported shootings in the future.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Add Libraries
+
+I am going to be using tidyverse to be running most of the background elements of the project, ggplot2 to create my visualizations, and lubridate to manage some of the data's columns.
+
+```{r addLibrarys}
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+
+```
+## Reading & Cleaning the Data
+
+The next step in the project is to read-in and clean the data to more easily see relevant connections and interesting facts that the data reveals.  Looking at the summary, it seems that there may be some missing data in some columns, so I am going to exclude those columns from my analysis and focus more on the areas where there is plenty of reported data to be accurate.  I am also going to start by ensuring that there are no duplicate rows by selecting only the distinct INCIDENT_KEY rows.
+
+
+```{r readInData}
+
+NYPD_URL <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv"
+NYPD_Data <- read_csv(NYPD_URL)
+
+summary(NYPD_Data)
+
+```
+```{r distinctRows}
+NYPD_Data_No_Dups <- filter(distinct(NYPD_Data,INCIDENT_KEY,.keep_all = TRUE))
+
+```
+
+
+Next I am going to look specifically at the data regarding the time of day of the reported shootings and the months of the year that the reported shootings occurred.
+
+``` {r cleanupDataForTimeDataNeighborhood Data}
+NYPD_Time_Boro <- NYPD_Data_No_Dups %>%
+  select(-c(Lon_Lat, X_COORD_CD, Y_COORD_CD, 
+            LOCATION_DESC, JURISDICTION_CODE, 
+            PRECINCT, STATISTICAL_MURDER_FLAG, 
+            PERP_AGE_GROUP, PERP_SEX, PERP_RACE, 
+            VIC_AGE_GROUP, VIC_SEX, VIC_RACE, 
+            Latitude, Longitude)) %>%
+  mutate(OCCUR_DATE = mdy(OCCUR_DATE))
+
+summary(NYPD_Time_Boro)
+```
+
+```{r monthOfYearHistogram}
+
+monthsOfTheYear<-c("Jan","Feb","Mar","Apr","May","June","July","Aug","Sep","Oct","Nov","Dec")
+
+incidentsByMonthOfYear <- 
+  ggplot(data=NYPD_Time_Boro, aes(x=month(OCCUR_DATE), fill = month(OCCUR_DATE))) + 
+  ggtitle("Number of NYPD Reported Shootings by Month") + 
+  ylab("Number of Shootings") + 
+  geom_histogram(aes(y = after_stat(count)), bins = 12, color="white", fill="darkcyan") + 
+  scale_x_continuous(expand = c(0, 0), name = "Months", labels = monthsOfTheYear, breaks=c(1:12)) +
+  theme_bw() + 
+  scale_y_continuous(expand = c(0, 0)) +
+  geom_smooth(data=NYPD_Time_Boro, aes(x=month(OCCUR_DATE), y = after_stat(count)), method = "lm")
+
+incidentsByMonthOfYear
+```
+
+### Analysis
+
+There were clear shifts in overall reported shooting by month, being the lowest in the winter and highest in summer.  There were shifts in the spring and fall between these points.
+
+``` {r timeOfDayHistogram}
+hoursOfDay <- seq(0,23,1)
+
+incidentsByHourOfDay <- ggplot(data = NYPD_Time_Boro, aes(x=hour(OCCUR_TIME))) + 
+  ggtitle("Number of NYPD Reported Shootings by Time of Day") + 
+  ylab("Number of Shootings") + 
+  geom_histogram(aes(y = after_stat(count)), bins = 24, color="white", fill="darkcyan") + 
+  scale_x_continuous(expand = c(0, 0), name = "Time of Day", labels = hoursOfDay, breaks=c(0:23)) + 
+  theme_bw() + 
+  scale_y_continuous(expand = c(0, 0))
+
+incidentsByHourOfDay
+```
+
+### Analysis
+
+Similarly to the previous graph, there were high points in reported shootings by hour of the day, with the highest reported shootings occurring at night between 23h00m and 23h59m, and the lowest reported shootings occurring in the morning between 07h00m and 09h59m. 
+
+
+At this point, I decided to include the various boroughs into the analysis of reported shootings by time of day and month. 
+
+
+```{r monthOfYearHistogramByBoro}
+
+monthsOfTheYear<-c("Jan","Feb","Mar","Apr","May","June","July","Aug","Sep","Oct","Nov","Dec")
+
+incidentsByMonthOfYear <- ggplot(data=NYPD_Time_Boro, aes(x=month(OCCUR_DATE), fill = BORO)) +
+  ggtitle("Number of NYPD Reported Shootings by Month") + 
+  ylab("Number of Shootings") + 
+  geom_histogram(aes(y = after_stat(count)), bins = 12, color="white") + 
+  scale_x_continuous(expand = c(0, 0), name = "Months", labels = monthsOfTheYear, breaks=c(1:12)) + 
+  scale_fill_viridis_d(direction = -1) + 
+  theme_bw() +
+  scale_y_continuous(expand = c(0, 0))
+
+incidentsByMonthOfYear
+```
+
+``` {r timeOfDayHistogramByBoro}
+hoursOfDay <- seq(0,23,1)
+
+incidentsByHourOfDay <- ggplot(data = NYPD_Time_Boro, aes(x=hour(OCCUR_TIME),  fill=BORO)) + 
+  ggtitle("Number of NYPD Reported Shootings by Time of Day") + 
+  ylab("Number of Shootings") + 
+  geom_histogram(aes(y = after_stat(count)), bins = 24, color="white") + 
+  scale_x_continuous(expand = c(0, 0), name = "Time of Day", labels = hoursOfDay, breaks=c(0:23)) + 
+  scale_fill_viridis_d(direction = -1) + theme_bw() + scale_y_continuous(expand = c(0, 0))
+
+incidentsByHourOfDay
+```
+
+### Analysis
+
+These graphs clearly show that there is a higher quantity of reported shootings in the Bronx and Brooklyn than the other three boroughs, regardless of time of day or month of the year.  If I were to explore more, I would be curious if the time of day or month of the year changes the percentage that each borough represents of the total reported shootings to a statistically significant degree.  This is an area that can be researched more in-depth.
+
+
+## Conclusion & Biases
+
+There are clear and statistically significant differences in the quantity of reported shootings both in terms of time of day and month of the year.  There are also statistically significant differences in the quantity of reported shootings between the five different boroughs contained in the data set. To attempt to avoid personal biases, I avoided looking at data outside of this data set and attempted to not include personal opinions or thoughts on the subject matter. A way to further mitigate biases would be to compare this data with that of other cities during a similar time-period.
+
+
+```{r sessionInfo}
+
+sessionInfo()
+
+```
